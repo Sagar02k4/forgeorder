@@ -75,6 +75,15 @@ public class IdempotencyService {
         }
     }
 
+    @Transactional
+    public void completeOperation(String idempotencyKey, int statusCode, String responseBody) {
+        IdempotencyRecord record = repository.findById(idempotencyKey)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Idempotency record not found when completing: " + idempotencyKey));
+        record.markSucceeded(statusCode, responseBody);
+        repository.save(record);
+    }
+
     private IdempotencyOutcome handleExistingRecord(IdempotencyRecord record, String requestHash) {
         if (!record.getRequestHash().equals(requestHash)) {
             return IdempotencyOutcome.conflict();
