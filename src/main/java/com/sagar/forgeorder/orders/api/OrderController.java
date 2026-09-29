@@ -1,6 +1,8 @@
 package com.sagar.forgeorder.orders.api;
 
 import com.sagar.forgeorder.common.api.ErrorResponse;
+import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
+import com.sagar.forgeorder.orders.persistence.OrderRepository;
 import tools.jackson.databind.ObjectMapper;
 import com.sagar.forgeorder.common.idempotency.IdempotencyOutcome;
 import com.sagar.forgeorder.common.idempotency.IdempotencyService;
@@ -20,13 +22,15 @@ public class OrderController {
     private final OrderService orderService;
     private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
+    private final OrderRepository orderRepository;
 
     public OrderController(OrderService orderService,
                            IdempotencyService idempotencyService,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper, OrderRepository orderRepository) {
         this.orderService = orderService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
+        this.orderRepository = orderRepository;
     }
 
     @PostMapping
@@ -93,5 +97,13 @@ public class OrderController {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to parse stored response JSON", e);
         }
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<OrderResponse> getOrder(@PathVariable UUID id) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new OrderNotFoundException(id));
+
+        return ResponseEntity.ok(OrderResponse.from(order));
     }
 }
