@@ -40,13 +40,21 @@ public class Order {
     @Version
     private Long version;
 
+    @Column(name = "product_id", nullable = false)
+    private UUID productId;
+
+    @Column(name = "quantity", nullable = false)
+    private int quantity;
+
     protected Order() {
         // required by JPA/Hibernate — do not use directly
     }
 
-    public Order(UUID customerId, BigDecimal subtotal, BigDecimal tax) {
+    public Order(UUID customerId, UUID productId, int quantity, BigDecimal subtotal, BigDecimal tax) {
         this.id = UUID.randomUUID();
         this.customerId = customerId;
+        this.productId = productId;
+        this.quantity = quantity;
         this.status = OrderStatus.DRAFT;
         this.subtotal = subtotal;
         this.tax = tax;

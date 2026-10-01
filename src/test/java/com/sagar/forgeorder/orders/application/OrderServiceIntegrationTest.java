@@ -1,5 +1,7 @@
 package com.sagar.forgeorder.orders.application;
 
+import com.sagar.forgeorder.inventory.domain.Inventory;
+import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
 import com.sagar.forgeorder.orders.domain.Order;
 import com.sagar.forgeorder.orders.domain.OrderAuditEvent;
 import com.sagar.forgeorder.orders.domain.OrderStatus;
@@ -9,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -38,24 +39,56 @@ class OrderServiceIntegrationTest {
     @Autowired
     private OrderAuditEventRepository auditEventRepository;
 
+    @Autowired
+    private InventoryRepository inventoryRepository;
+
     @Test
-    void createOrderPersistsOrderAndAuditEventTogether() {
+    void createOrderPersistsOrderAndAuditEventTogetherWhenStockAvailable() {
         UUID customerId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        inventoryRepository.save(new Inventory(productId, 10)); // kaafi stock hai
+
         BigDecimal subtotal = new BigDecimal("100.00");
         BigDecimal tax = new BigDecimal("18.00");
         String correlationId = "test-corr-" + UUID.randomUUID();
 
-        Order createdOrder = orderService.createOrder(customerId, subtotal, tax, correlationId);
+        Order createdOrder = orderService.createOrder(
+                customerId, productId, 1, subtotal, tax, correlationId
+        );
 
         Optional<Order> fetchedOrder = orderRepository.findById(createdOrder.getId());
         assertThat(fetchedOrder).isPresent();
-        assertThat(fetchedOrder.get().getStatus()).isEqualTo(OrderStatus.CREATED);
-        assertThat(fetchedOrder.get().getCustomerId()).isEqualTo(customerId);
+        assertThat(fetchedOrder.get().getStatus()).isEqualTo(OrderStatus.INVENTORY_RESERVED);
 
-        List<OrderAuditEvent> auditEvents = auditEventRepository.findByOrderIdOrderByOccurredAtAsc(createdOrder.getId());
-        assertThat(auditEvents).hasSize(1);
-        assertThat(auditEvents.get(0).getPreviousState()).isEqualTo(OrderStatus.DRAFT);
-        assertThat(auditEvents.get(0).getNewState()).isEqualTo(OrderStatus.CREATED);
-        assertThat(auditEvents.get(0).getCorrelationId()).isEqualTo(correlationId);
+        List<OrderAuditEvent> auditEvents =
+                auditEventRepository.findByOrderIdOrderByOccurredAtAsc(createdOrder.getId());
+        assertThat(auditEvents).hasSize(3); // CREATED, RESERVATION_PENDING, RESERVED
+
+        Inventory inventoryAfter = inventoryRepository.findById(productId).orElseThrow();
+        assertThat(inventoryAfter.getAvailableQuantity()).isEqualTo(9);
+        assertThat(inventoryAfter.getReservedQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    void createOrderCancelsOrderWhenStockUnavailable() {
+        UUID customerId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        inventoryRepository.save(new Inventory(productId, 0)); // koi stock nahi hai
+
+        BigDecimal subtotal = new BigDecimal("100.00");
+        BigDecimal tax = new BigDecimal("18.00");
+        String correlationId = "test-corr-" + UUID.randomUUID();
+
+        Order createdOrder = orderService.createOrder(
+                customerId, productId, 1, subtotal, tax, correlationId
+        );
+
+        Optional<Order> fetchedOrder = orderRepository.findById(createdOrder.getId());
+        assertThat(fetchedOrder).isPresent();
+        assertThat(fetchedOrder.get().getStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        List<OrderAuditEvent> auditEvents =
+                auditEventRepository.findByOrderIdOrderByOccurredAtAsc(createdOrder.getId());
+        assertThat(auditEvents).hasSize(4); // CREATED, PENDING, UNAVAILABLE, CANCELLED
     }
 }

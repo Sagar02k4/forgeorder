@@ -12,7 +12,8 @@ class OrderTest {
 
     @Test
     void newOrderStartsInDraftStatus() {
-        Order order = new Order(UUID.randomUUID(), new BigDecimal("100.00"), new BigDecimal("18.00"));
+        Order order = new Order(UUID.randomUUID(), UUID.randomUUID(), 1,
+                new BigDecimal("100.00"), new BigDecimal("18.00"));
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DRAFT);
         assertThat(order.getTotalAmount()).isEqualByComparingTo("118.00");
@@ -20,9 +21,9 @@ class OrderTest {
 
     @Test
     void transitionToValidStateUpdatesStatusAndReturnsMatchingAuditEvent() {
-        Order order = new Order(UUID.randomUUID(), new BigDecimal("100.00"), new BigDecimal("18.00"));
+        Order order = new Order(UUID.randomUUID(), UUID.randomUUID(), 1,
+                new BigDecimal("100.00"), new BigDecimal("18.00"));
         order.transitionTo(OrderStatus.CREATED, "SYSTEM_WORKER", null, "corr-123", null, "initial creation");
-        // First move it to CREATED (DRAFT -> CREATED is the only valid first step)
 
         OrderAuditEvent event = order.transitionTo(
                 OrderStatus.INVENTORY_RESERVATION_PENDING,
@@ -42,13 +43,13 @@ class OrderTest {
 
     @Test
     void transitionToInvalidStateThrowsAndDoesNotChangeStatus() {
-        Order order = new Order(UUID.randomUUID(), new BigDecimal("100.00"), new BigDecimal("18.00"));
+        Order order = new Order(UUID.randomUUID(), UUID.randomUUID(), 1,
+                new BigDecimal("100.00"), new BigDecimal("18.00"));
 
         assertThatThrownBy(() ->
                 order.transitionTo(OrderStatus.CONFIRMED, "SYSTEM_WORKER", null, "corr-123", null, "invalid jump")
         ).isInstanceOf(InvalidOrderStateTransitionException.class);
 
-        // status should remain unchanged since the transition was rejected
         assertThat(order.getStatus()).isEqualTo(OrderStatus.DRAFT);
     }
 }

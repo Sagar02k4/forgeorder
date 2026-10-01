@@ -1,6 +1,7 @@
 package com.sagar.forgeorder.orders.api;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
@@ -10,6 +11,13 @@ public record CreateOrderRequest(
 
         @NotNull(message = "customerId is required")
         UUID customerId,
+
+        @NotNull(message = "productId is required")
+        UUID productId,
+
+        @NotNull(message = "quantity is required")
+        @Min(value = 1, message = "quantity must be at least 1")
+        Integer quantity,
 
         @NotNull(message = "subtotal is required")
         @DecimalMin(value = "0.00", message = "subtotal must not be negative")
