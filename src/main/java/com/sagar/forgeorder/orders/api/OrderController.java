@@ -3,6 +3,9 @@ package com.sagar.forgeorder.orders.api;
 import com.sagar.forgeorder.common.api.ErrorResponse;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
 import com.sagar.forgeorder.orders.persistence.OrderRepository;
+import com.sagar.forgeorder.payments.api.InitiatePaymentRequest;
+import com.sagar.forgeorder.payments.api.PaymentResponse;
+import com.sagar.forgeorder.payments.application.PaymentService;
 import tools.jackson.databind.ObjectMapper;
 import com.sagar.forgeorder.common.idempotency.IdempotencyOutcome;
 import com.sagar.forgeorder.common.idempotency.IdempotencyService;
@@ -23,14 +26,16 @@ public class OrderController {
     private final IdempotencyService idempotencyService;
     private final ObjectMapper objectMapper;
     private final OrderRepository orderRepository;
+    private final PaymentService paymentService;
 
     public OrderController(OrderService orderService,
                            IdempotencyService idempotencyService,
-                           ObjectMapper objectMapper, OrderRepository orderRepository) {
+                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService) {
         this.orderService = orderService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
         this.orderRepository = orderRepository;
+        this.paymentService = paymentService;
     }
 
     @PostMapping
@@ -106,5 +111,62 @@ public class OrderController {
                 .orElseThrow(() -> new OrderNotFoundException(id));
 
         return ResponseEntity.ok(OrderResponse.from(order));
+    }
+
+    @PostMapping("/{id}/payments")
+    public ResponseEntity<?> initiatePayment(
+            @PathVariable UUID id,
+            @Valid @RequestBody InitiatePaymentRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationIdHeader) {
+
+        String correlationId = (correlationIdHeader != null) ? correlationIdHeader : UUID.randomUUID().toString();
+        String requestHash = idempotencyService.hashRequestBody(serializeToJson(request));
+
+        IdempotencyOutcome outcome = idempotencyService.beginOperation(
+                idempotencyKey, "INITIATE_PAYMENT", id.toString(), requestHash
+        );
+
+        return switch (outcome.getType()) {
+            case CONFLICT -> ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse(
+                            "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD",
+                            "The Idempotency-Key belongs to a request with different content.",
+                            correlationId
+                    ));
+
+            case IN_PROGRESS -> ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse(
+                            "REQUEST_IN_PROGRESS",
+                            "A request with this Idempotency-Key is already being processed.",
+                            correlationId
+                    ));
+
+            case ALREADY_COMPLETED -> ResponseEntity.status(outcome.getStoredStatusCode())
+                    .body(rawJsonBody(outcome.getStoredResponseBody()));
+
+            case PROCEED -> handlePaymentInitiation(id, request, idempotencyKey, correlationId);
+        };
+    }
+
+    private ResponseEntity<?> handlePaymentInitiation(UUID orderId,
+                                                      InitiatePaymentRequest request,
+                                                      String idempotencyKey,
+                                                      String correlationId) {
+        paymentService.initiatePayment(orderId, idempotencyKey, request.cardToken(), correlationId);
+
+        Order updatedOrder = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        PaymentResponse response = new PaymentResponse(
+                updatedOrder.getId(),
+                updatedOrder.getStatus(),
+                "Payment processed with outcome: " + updatedOrder.getStatus()
+        );
+
+        String responseJson = serializeToJson(response);
+        idempotencyService.completeOperation(idempotencyKey, HttpStatus.OK.value(), responseJson);
+
+        return ResponseEntity.ok(response);
     }
 }
