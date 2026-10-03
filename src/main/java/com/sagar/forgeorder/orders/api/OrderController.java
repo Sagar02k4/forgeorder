@@ -1,11 +1,13 @@
 package com.sagar.forgeorder.orders.api;
 
 import com.sagar.forgeorder.common.api.ErrorResponse;
+import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
 import com.sagar.forgeorder.orders.persistence.OrderRepository;
 import com.sagar.forgeorder.payments.api.InitiatePaymentRequest;
 import com.sagar.forgeorder.payments.api.PaymentResponse;
 import com.sagar.forgeorder.payments.application.PaymentService;
+import com.sagar.forgeorder.payments.persistence.PaymentAttemptRepository;
 import tools.jackson.databind.ObjectMapper;
 import com.sagar.forgeorder.common.idempotency.IdempotencyOutcome;
 import com.sagar.forgeorder.common.idempotency.IdempotencyService;
@@ -27,15 +29,19 @@ public class OrderController {
     private final ObjectMapper objectMapper;
     private final OrderRepository orderRepository;
     private final PaymentService paymentService;
+    private final InventoryRepository inventoryRepository;
+    private final PaymentAttemptRepository paymentAttemptRepository;
 
     public OrderController(OrderService orderService,
                            IdempotencyService idempotencyService,
-                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService) {
+                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository) {
         this.orderService = orderService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
         this.orderRepository = orderRepository;
         this.paymentService = paymentService;
+        this.inventoryRepository = inventoryRepository;
+        this.paymentAttemptRepository = paymentAttemptRepository;
     }
 
     @PostMapping
@@ -81,7 +87,7 @@ public class OrderController {
                 request.subtotal(), request.tax(), correlationId
         );
 
-        OrderResponse response = OrderResponse.from(order);
+        OrderResponse response = buildOrderResponse(order);
         String responseJson = serializeToJson(response);
 
         idempotencyService.completeOperation(idempotencyKey, HttpStatus.CREATED.value(), responseJson);
@@ -110,7 +116,7 @@ public class OrderController {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new OrderNotFoundException(id));
 
-        return ResponseEntity.ok(OrderResponse.from(order));
+        return ResponseEntity.ok(buildOrderResponse(order));
     }
 
     @PostMapping("/{id}/payments")
@@ -168,5 +174,19 @@ public class OrderController {
         idempotencyService.completeOperation(idempotencyKey, HttpStatus.OK.value(), responseJson);
 
         return ResponseEntity.ok(response);
+    }
+
+    private OrderResponse buildOrderResponse(Order order) {
+        OrderResponse.InventorySummary inventorySummary = inventoryRepository.findById(order.getProductId())
+                .map(inv -> new OrderResponse.InventorySummary(inv.getAvailableQuantity(), inv.getReservedQuantity()))
+                .orElse(null);
+
+        OrderResponse.PaymentSummary paymentSummary = paymentAttemptRepository
+                .findFirstByOrderIdOrderByCreatedAtDesc(order.getId())
+                .map(pa -> new OrderResponse.PaymentSummary(
+                        pa.getStatus().name(), pa.getProviderPaymentId(), pa.getDeclineReason()))
+                .orElse(null);
+
+        return OrderResponse.from(order, inventorySummary, paymentSummary);
     }
 }

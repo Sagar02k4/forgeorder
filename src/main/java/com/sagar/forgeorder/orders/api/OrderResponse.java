@@ -17,9 +17,25 @@ public record OrderResponse(
         BigDecimal tax,
         BigDecimal totalAmount,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        InventorySummary inventory,
+        PaymentSummary payment
 ) {
-    public static OrderResponse from(Order order) {
+
+    public record InventorySummary(
+            int availableQuantity,
+            int reservedQuantity
+    ) {
+    }
+
+    public record PaymentSummary(
+            String status,
+            String providerPaymentId,
+            String declineReason
+    ) {
+    }
+
+    public static OrderResponse from(Order order, InventorySummary inventory, PaymentSummary payment) {
         return new OrderResponse(
                 order.getId(),
                 order.getCustomerId(),
@@ -30,7 +46,9 @@ public record OrderResponse(
                 order.getTax(),
                 order.getTotalAmount(),
                 order.getCreatedAt(),
-                order.getUpdatedAt()
+                order.getUpdatedAt(),
+                inventory,
+                payment
         );
     }
 }
