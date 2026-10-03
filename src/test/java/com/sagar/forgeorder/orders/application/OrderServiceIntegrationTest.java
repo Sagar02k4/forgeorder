@@ -1,5 +1,7 @@
 package com.sagar.forgeorder.orders.application;
 
+import com.sagar.forgeorder.catalog.domain.Product;
+import com.sagar.forgeorder.catalog.persistence.ProductRepository;
 import com.sagar.forgeorder.inventory.domain.Inventory;
 import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
 import com.sagar.forgeorder.orders.domain.Order;
@@ -41,19 +43,22 @@ class OrderServiceIntegrationTest {
 
     @Autowired
     private InventoryRepository inventoryRepository;
+    @Autowired
+    private ProductRepository productRepository;
 
     @Test
     void createOrderPersistsOrderAndAuditEventTogetherWhenStockAvailable() {
         UUID customerId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
-        inventoryRepository.save(new Inventory(productId, 10)); // kaafi stock hai
+        productRepository.save(new Product(productId, "Test Product", new BigDecimal("100.00"), new BigDecimal("0.18")));
+        inventoryRepository.save(new Inventory(productId, 10));
 
         BigDecimal subtotal = new BigDecimal("100.00");
         BigDecimal tax = new BigDecimal("18.00");
         String correlationId = "test-corr-" + UUID.randomUUID();
 
         Order createdOrder = orderService.createOrder(
-                customerId, productId, 1, subtotal, tax, correlationId
+                customerId, productId, 1, correlationId
         );
 
         Optional<Order> fetchedOrder = orderRepository.findById(createdOrder.getId());
@@ -73,14 +78,15 @@ class OrderServiceIntegrationTest {
     void createOrderCancelsOrderWhenStockUnavailable() {
         UUID customerId = UUID.randomUUID();
         UUID productId = UUID.randomUUID();
-        inventoryRepository.save(new Inventory(productId, 0)); // koi stock nahi hai
+        productRepository.save(new Product(productId, "Test Product", new BigDecimal("100.00"), new BigDecimal("0.18")));
+        inventoryRepository.save(new Inventory(productId, 0));
 
         BigDecimal subtotal = new BigDecimal("100.00");
         BigDecimal tax = new BigDecimal("18.00");
         String correlationId = "test-corr-" + UUID.randomUUID();
 
         Order createdOrder = orderService.createOrder(
-                customerId, productId, 1, subtotal, tax, correlationId
+                customerId, productId, 1, correlationId
         );
 
         Optional<Order> fetchedOrder = orderRepository.findById(createdOrder.getId());

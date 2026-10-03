@@ -83,8 +83,7 @@ public class OrderController {
                                                      String idempotencyKey,
                                                      String correlationId) {
         Order order = orderService.createOrder(
-                request.customerId(), request.productId(), request.quantity(),
-                request.subtotal(), request.tax(), correlationId
+                request.customerId(), request.productId(), request.quantity(), correlationId
         );
 
         OrderResponse response = buildOrderResponse(order);

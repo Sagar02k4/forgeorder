@@ -1,11 +1,15 @@
 package com.sagar.forgeorder.orders.application;
 
+import com.sagar.forgeorder.catalog.domain.Product;
+import com.sagar.forgeorder.catalog.domain.ProductNotFoundException;
+import com.sagar.forgeorder.catalog.persistence.ProductRepository;
 import com.sagar.forgeorder.inventory.application.InventoryService;
 import com.sagar.forgeorder.orders.domain.Order;
 import com.sagar.forgeorder.orders.domain.OrderAuditEvent;
 import com.sagar.forgeorder.orders.domain.OrderStatus;
 import com.sagar.forgeorder.orders.persistence.OrderAuditEventRepository;
 import com.sagar.forgeorder.orders.persistence.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,25 +22,33 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final OrderAuditEventRepository auditEventRepository;
     private final InventoryService inventoryService;
+    @Autowired
+    private final ProductRepository productRepository;
 
     public OrderService(OrderRepository orderRepository,
                         OrderAuditEventRepository auditEventRepository,
-                        InventoryService inventoryService) {
+                        InventoryService inventoryService,
+                        ProductRepository productRepository) {
         this.orderRepository = orderRepository;
         this.auditEventRepository = auditEventRepository;
         this.inventoryService = inventoryService;
+        this.productRepository = productRepository;
     }
 
     @Transactional
     public Order createOrder(UUID customerId,
                              UUID productId,
                              int quantity,
-                             BigDecimal subtotal,
-                             BigDecimal tax,
                              String correlationId) {
 
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+
+        BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
+        BigDecimal tax = subtotal.multiply(product.getTaxRate());
+
         Order order = new Order(customerId, productId, quantity, subtotal, tax);
-        orderRepository.save(order);   // <- YAHAN PEHLE SAVE KARO, taaki FK constraint satisfy ho
+        orderRepository.save(order);
 
         OrderAuditEvent createdEvent = order.transitionTo(
                 OrderStatus.CREATED, "CUSTOMER", customerId.toString(),

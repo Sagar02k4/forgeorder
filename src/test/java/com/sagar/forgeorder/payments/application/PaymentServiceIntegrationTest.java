@@ -1,5 +1,7 @@
 package com.sagar.forgeorder.payments.application;
 
+import com.sagar.forgeorder.catalog.domain.Product;
+import com.sagar.forgeorder.catalog.persistence.ProductRepository;
 import com.sagar.forgeorder.inventory.domain.Inventory;
 import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
 import com.sagar.forgeorder.orders.application.OrderService;
@@ -46,13 +48,16 @@ class PaymentServiceIntegrationTest {
     @Autowired
     private InventoryRepository inventoryRepository;
 
+    @Autowired
+    private ProductRepository productRepository;
+
     private UUID createReservedOrder() {
         UUID productId = UUID.randomUUID();
+        productRepository.save(new Product(productId, "Test Product", new BigDecimal("100.00"), new BigDecimal("0.18")));
         inventoryRepository.save(new Inventory(productId, 10));
 
         Order order = orderService.createOrder(
                 UUID.randomUUID(), productId, 1,
-                new BigDecimal("100.00"), new BigDecimal("18.00"),
                 "test-corr-" + UUID.randomUUID()
         );
         return order.getId();

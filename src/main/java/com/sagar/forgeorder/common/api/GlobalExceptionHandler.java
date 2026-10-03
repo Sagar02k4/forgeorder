@@ -1,5 +1,6 @@
 package com.sagar.forgeorder.common.api;
 
+import com.sagar.forgeorder.catalog.domain.ProductNotFoundException;
 import com.sagar.forgeorder.orders.domain.InvalidOrderStateTransitionException;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
 import org.springframework.http.HttpStatus;
@@ -61,6 +62,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleOrderNotFound(
             OrderNotFoundException ex, WebRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+                ex.getErrorCode(),
+                ex.getMessage(),
+                resolveCorrelationId(request)
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleProductNotFound(
+            ProductNotFoundException ex, WebRequest request) {
 
         ErrorResponse error = new ErrorResponse(
                 ex.getErrorCode(),
