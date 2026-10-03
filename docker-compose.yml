@@ -12,5 +12,16 @@ services:
     volumes:
       - forgeorder-postgres-data:/var/lib/postgresql/data
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: forgeorder-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: forgeorder_user
+      RABBITMQ_DEFAULT_PASS: forgeorder_pass
+
 volumes:
   forgeorder-postgres-data:

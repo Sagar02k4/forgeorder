@@ -5,6 +5,7 @@ import com.sagar.forgeorder.orders.domain.OrderAuditEvent;
 import com.sagar.forgeorder.orders.domain.OrderStatus;
 import com.sagar.forgeorder.orders.persistence.OrderAuditEventRepository;
 import com.sagar.forgeorder.orders.persistence.OrderRepository;
+import com.sagar.forgeorder.outbox.application.OutboxEventWriter;
 import com.sagar.forgeorder.payments.domain.PaymentAttempt;
 import com.sagar.forgeorder.payments.domain.PaymentGatewayResult;
 import com.sagar.forgeorder.payments.gateway.PaymentGateway;
@@ -21,15 +22,17 @@ public class ReconciliationService {
     private final OrderAuditEventRepository auditEventRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final PaymentGateway paymentGateway;
+    private final OutboxEventWriter outboxEventWriter;
 
     public ReconciliationService(OrderRepository orderRepository,
                                  OrderAuditEventRepository auditEventRepository,
                                  PaymentAttemptRepository paymentAttemptRepository,
-                                 PaymentGateway paymentGateway) {
+                                 PaymentGateway paymentGateway, OutboxEventWriter outboxEventWriter) {
         this.orderRepository = orderRepository;
         this.auditEventRepository = auditEventRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.paymentGateway = paymentGateway;
+        this.outboxEventWriter = outboxEventWriter;
     }
 
     @Transactional
@@ -65,6 +68,8 @@ public class ReconciliationService {
                         "Order confirmed after reconciliation"
                 );
                 auditEventRepository.save(confirmedEvent);
+
+                outboxEventWriter.writeOrderEvent(order.getId(), "ORDER_CONFIRMED");
             }
             case DECLINED -> {
                 attempt.markFailed(result.declineReason(), result.rawResponse());
