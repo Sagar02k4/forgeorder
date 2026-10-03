@@ -12,7 +12,8 @@ public record PaymentGatewayResult(
     public enum GatewayOutcome {
         SUCCESS,
         DECLINED,
-        TIMEOUT
+        TIMEOUT,
+        NOT_FOUND
     }
 
     public static PaymentGatewayResult success(String providerPaymentId, BigDecimal amount, String rawResponse) {
@@ -25,5 +26,9 @@ public record PaymentGatewayResult(
 
     public static PaymentGatewayResult timeout(BigDecimal amount, String rawResponse) {
         return new PaymentGatewayResult(GatewayOutcome.TIMEOUT, null, amount, null, rawResponse);
+    }
+
+    public static PaymentGatewayResult notFound(String rawResponse) {
+        return new PaymentGatewayResult(GatewayOutcome.NOT_FOUND, null, null, null, rawResponse);
     }
 }

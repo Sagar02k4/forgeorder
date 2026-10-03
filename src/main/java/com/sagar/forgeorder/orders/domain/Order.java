@@ -46,6 +46,12 @@ public class Order {
     @Column(name = "quantity", nullable = false)
     private int quantity;
 
+    @Column(name = "reconciliation_leased_by")
+    private String reconciliationLeasedBy;
+
+    @Column(name = "reconciliation_leased_until")
+    private Instant reconciliationLeasedUntil;
+
     protected Order() {
         // required by JPA/Hibernate — do not use directly
     }
@@ -89,5 +95,20 @@ public class Order {
                 causationId,
                 reason
         );
+    }
+
+    public boolean tryAcquireReconciliationLease(String workerId, Instant now, Instant leaseDuration) {
+        boolean isFree = reconciliationLeasedUntil == null || reconciliationLeasedUntil.isBefore(now);
+        if (!isFree) {
+            return false;
+        }
+        this.reconciliationLeasedBy = workerId;
+        this.reconciliationLeasedUntil = leaseDuration;
+        return true;
+    }
+
+    public void releaseReconciliationLease() {
+        this.reconciliationLeasedBy = null;
+        this.reconciliationLeasedUntil = null;
     }
 }
