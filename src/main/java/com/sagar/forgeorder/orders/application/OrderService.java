@@ -62,7 +62,7 @@ public class OrderService {
         );
         auditEventRepository.save(reservationPendingEvent);
 
-        boolean reserved = inventoryService.reserveStock(productId, quantity);
+        boolean reserved = inventoryService.reserveStock(order.getId(), productId, quantity);
 
         if (reserved) {
             OrderAuditEvent reservedEvent = order.transitionTo(

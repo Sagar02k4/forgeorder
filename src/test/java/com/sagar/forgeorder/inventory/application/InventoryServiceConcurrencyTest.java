@@ -2,6 +2,8 @@ package com.sagar.forgeorder.inventory.application;
 
 import com.sagar.forgeorder.inventory.domain.Inventory;
 import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
+import com.sagar.forgeorder.orders.domain.Order;
+import com.sagar.forgeorder.orders.persistence.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,6 +12,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -32,10 +35,20 @@ class InventoryServiceConcurrencyTest {
     @Autowired
     private InventoryRepository inventoryRepository;
 
+    @Autowired
+    private OrderRepository orderRepository;
+
     @Test
     void onlyOneConcurrentBuyerReservesTheLastUnit() throws InterruptedException, ExecutionException, TimeoutException {
         UUID productId = UUID.randomUUID();
         inventoryRepository.save(new Inventory(productId, 1)); // sirf 1 item stock mein hai
+
+        Order dummyOrder = new Order(
+                UUID.randomUUID(), productId, 1,
+                new BigDecimal("100.00"), new BigDecimal("18.00")
+        );
+        orderRepository.save(dummyOrder);
+        UUID orderId = dummyOrder.getId();
 
         int numberOfThreads = 100;
         ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
@@ -51,7 +64,7 @@ class InventoryServiceConcurrencyTest {
                 readyLatch.countDown();
                 try {
                     startLatch.await();
-                    boolean reserved = inventoryService.reserveStock(productId, 1);
+                    boolean reserved = inventoryService.reserveStock(orderId, productId, 1);
                     if (reserved) {
                         successCount.incrementAndGet();
                     } else {

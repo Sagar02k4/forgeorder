@@ -23,4 +23,16 @@ public interface InventoryRepository extends JpaRepository<Inventory, UUID> {
     int tryReserveStock(@Param("productId") UUID productId,
                         @Param("quantity") int quantity,
                         @Param("now") Instant now);
+
+    @Modifying
+    @Query("""
+        UPDATE Inventory i
+        SET i.availableQuantity = i.availableQuantity + :quantity,
+            i.reservedQuantity = i.reservedQuantity - :quantity,
+            i.updatedAt = :now
+        WHERE i.productId = :productId
+        """)
+    int releaseStock(@Param("productId") UUID productId,
+                     @Param("quantity") int quantity,
+                     @Param("now") Instant now);
 }
