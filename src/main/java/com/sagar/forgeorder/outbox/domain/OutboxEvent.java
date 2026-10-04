@@ -46,8 +46,8 @@ public class OutboxEvent {
         // required by JPA
     }
 
-    public OutboxEvent(String aggregateType, UUID aggregateId, String eventType, String payload) {
-        this.id = UUID.randomUUID();
+    public OutboxEvent(UUID id, String aggregateType, UUID aggregateId, String eventType, String payload) {
+        this.id = id;
         this.aggregateType = aggregateType;
         this.aggregateId = aggregateId;
         this.eventType = eventType;

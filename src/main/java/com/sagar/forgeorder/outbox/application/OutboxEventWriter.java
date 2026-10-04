@@ -20,13 +20,15 @@ public class OutboxEventWriter {
     }
 
     public void writeOrderEvent(UUID orderId, String eventType) {
+        UUID eventId = UUID.randomUUID();
         Map<String, Object> payloadMap = Map.of(
+                "eventId", eventId.toString(),
                 "orderId", orderId.toString(),
                 "eventType", eventType
         );
         String payload = serializeToJson(payloadMap);
 
-        OutboxEvent event = new OutboxEvent("ORDER", orderId, eventType, payload);
+        OutboxEvent event = new OutboxEvent(eventId, "ORDER", orderId, eventType, payload);
         outboxEventRepository.save(event);
     }
 
