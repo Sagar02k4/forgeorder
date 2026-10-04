@@ -29,7 +29,7 @@ public class OutboxPublisher {
 
         for (OutboxEvent event : pendingEvents) {
             try {
-                rabbitTemplate.convertAndSend(RabbitMQConfig.ORDER_EVENTS_QUEUE, event.getPayload());
+                rabbitTemplate.convertAndSend(RabbitMQConfig.ORDER_EVENTS_EXCHANGE, "", event.getPayload());
                 event.markPublished();
             } catch (Exception e) {
                 event.markFailedAttempt();

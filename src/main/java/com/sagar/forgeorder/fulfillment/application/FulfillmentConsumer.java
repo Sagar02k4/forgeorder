@@ -1,4 +1,4 @@
-package com.sagar.forgeorder.notifications.application;
+package com.sagar.forgeorder.fulfillment.application;
 
 import com.sagar.forgeorder.common.messaging.ProcessedMessageTracker;
 import com.sagar.forgeorder.config.RabbitMQConfig;
@@ -10,19 +10,23 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.UUID;
 
 @Component
-public class NotificationConsumer {
+public class FulfillmentConsumer {
 
-    private static final String CONSUMER_NAME = "notification-service";
+    private static final String CONSUMER_NAME = "fulfillment-service";
 
     private final ProcessedMessageTracker processedMessageTracker;
+    private final FulfillmentService fulfillmentService;
     private final ObjectMapper objectMapper;
 
-    public NotificationConsumer(ProcessedMessageTracker processedMessageTracker, ObjectMapper objectMapper) {
+    public FulfillmentConsumer(ProcessedMessageTracker processedMessageTracker,
+                               FulfillmentService fulfillmentService,
+                               ObjectMapper objectMapper) {
         this.processedMessageTracker = processedMessageTracker;
+        this.fulfillmentService = fulfillmentService;
         this.objectMapper = objectMapper;
     }
 
-    @RabbitListener(queues = RabbitMQConfig.NOTIFICATION_QUEUE)
+    @RabbitListener(queues = RabbitMQConfig.FULFILLMENT_QUEUE)
     public void handleOrderEvent(String messagePayload) {
         JsonNode json = objectMapper.readTree(messagePayload);
 
@@ -31,20 +35,20 @@ public class NotificationConsumer {
         }
 
         UUID eventId = UUID.fromString(json.get("eventId").asString());
-        String orderId = json.get("orderId").asString();
+        UUID orderId = UUID.fromString(json.get("orderId").asString());
         String eventType = json.get("eventType").asString();
+
+        if (!"ORDER_CONFIRMED".equals(eventType)) {
+            return;
+        }
 
         boolean isNewEvent = processedMessageTracker.tryMarkAsProcessed(CONSUMER_NAME, eventId);
 
         if (!isNewEvent) {
-            System.out.println("Duplicate event detected, skipping: " + eventId);
+            System.out.println("Duplicate fulfillment event detected, skipping: " + eventId);
             return;
         }
 
-        sendNotification(orderId, eventType);
-    }
-
-    private void sendNotification(String orderId, String eventType) {
-        System.out.println("[NOTIFICATION] Order " + orderId + " -> " + eventType + " (simulated email sent)");
+        fulfillmentService.createShipment(orderId);
     }
 }
