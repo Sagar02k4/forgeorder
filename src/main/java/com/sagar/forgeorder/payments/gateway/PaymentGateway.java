@@ -7,4 +7,5 @@ import java.math.BigDecimal;
 public interface PaymentGateway {
     PaymentGatewayResult charge(String idempotencyKey, BigDecimal amount, String cardToken);
     PaymentGatewayResult queryStatus(String idempotencyKey);
+    PaymentGatewayResult refund(String idempotencyKey, String providerPaymentId, BigDecimal amount);
 }

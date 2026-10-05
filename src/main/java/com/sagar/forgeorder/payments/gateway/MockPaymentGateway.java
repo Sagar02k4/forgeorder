@@ -78,4 +78,15 @@ public class MockPaymentGateway implements PaymentGateway {
 
         return storedResult;
     }
+
+    @Override
+    public PaymentGatewayResult refund(String idempotencyKey, String providerPaymentId, BigDecimal amount) {
+        String providerRefundId = "refund_" + UUID.randomUUID();
+        PaymentGatewayResult result = PaymentGatewayResult.success(
+                providerRefundId, amount,
+                "{\"status\":\"refunded\",\"id\":\"" + providerRefundId + "\"}"
+        );
+        gatewaySideRecords.put(idempotencyKey, result);
+        return result;
+    }
 }

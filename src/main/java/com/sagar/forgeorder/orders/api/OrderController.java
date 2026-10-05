@@ -8,6 +8,8 @@ import com.sagar.forgeorder.payments.api.InitiatePaymentRequest;
 import com.sagar.forgeorder.payments.api.PaymentResponse;
 import com.sagar.forgeorder.payments.application.PaymentService;
 import com.sagar.forgeorder.payments.persistence.PaymentAttemptRepository;
+import com.sagar.forgeorder.refunds.api.InitiateRefundRequest;
+import com.sagar.forgeorder.refunds.application.RefundService;
 import tools.jackson.databind.ObjectMapper;
 import com.sagar.forgeorder.common.idempotency.IdempotencyOutcome;
 import com.sagar.forgeorder.common.idempotency.IdempotencyService;
@@ -31,10 +33,11 @@ public class OrderController {
     private final PaymentService paymentService;
     private final InventoryRepository inventoryRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
+    private final RefundService refundService;
 
     public OrderController(OrderService orderService,
                            IdempotencyService idempotencyService,
-                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository) {
+                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository, RefundService refundService) {
         this.orderService = orderService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
@@ -42,6 +45,7 @@ public class OrderController {
         this.paymentService = paymentService;
         this.inventoryRepository = inventoryRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
+        this.refundService = refundService;
     }
 
     @PostMapping
@@ -187,5 +191,62 @@ public class OrderController {
                 .orElse(null);
 
         return OrderResponse.from(order, inventorySummary, paymentSummary);
+    }
+
+    @PostMapping("/{id}/refunds")
+    public ResponseEntity<?> initiateRefund(
+            @PathVariable UUID id,
+            @Valid @RequestBody InitiateRefundRequest request,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationIdHeader) {
+
+        String correlationId = (correlationIdHeader != null) ? correlationIdHeader : UUID.randomUUID().toString();
+        String requestHash = idempotencyService.hashRequestBody(serializeToJson(request));
+
+        IdempotencyOutcome outcome = idempotencyService.beginOperation(
+                idempotencyKey, "INITIATE_REFUND", id.toString(), requestHash
+        );
+
+        return switch (outcome.getType()) {
+            case CONFLICT -> ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse(
+                            "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD",
+                            "The Idempotency-Key belongs to a request with different content.",
+                            correlationId
+                    ));
+
+            case IN_PROGRESS -> ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse(
+                            "REQUEST_IN_PROGRESS",
+                            "A request with this Idempotency-Key is already being processed.",
+                            correlationId
+                    ));
+
+            case ALREADY_COMPLETED -> ResponseEntity.status(outcome.getStoredStatusCode())
+                    .body(rawJsonBody(outcome.getStoredResponseBody()));
+
+            case PROCEED -> handleRefundInitiation(id, request, idempotencyKey, correlationId);
+        };
+    }
+
+    private ResponseEntity<?> handleRefundInitiation(UUID orderId,
+                                                     InitiateRefundRequest request,
+                                                     String idempotencyKey,
+                                                     String correlationId) {
+        refundService.initiateRefund(orderId, idempotencyKey, request.amount(), correlationId);
+
+        Order updatedOrder = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        PaymentResponse response = new PaymentResponse(
+                updatedOrder.getId(),
+                updatedOrder.getStatus(),
+                "Refund processed, order status: " + updatedOrder.getStatus()
+        );
+
+        String responseJson = serializeToJson(response);
+        idempotencyService.completeOperation(idempotencyKey, HttpStatus.OK.value(), responseJson);
+
+        return ResponseEntity.ok(response);
     }
 }

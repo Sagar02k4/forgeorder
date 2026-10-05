@@ -3,6 +3,7 @@ package com.sagar.forgeorder.common.api;
 import com.sagar.forgeorder.catalog.domain.ProductNotFoundException;
 import com.sagar.forgeorder.orders.domain.InvalidOrderStateTransitionException;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
+import com.sagar.forgeorder.refunds.domain.InvalidRefundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -81,5 +82,17 @@ public class GlobalExceptionHandler {
                 resolveCorrelationId(request)
         );
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(InvalidRefundException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRefund(
+            InvalidRefundException ex, WebRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+                ex.getErrorCode(),
+                ex.getMessage(),
+                resolveCorrelationId(request)
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 }
