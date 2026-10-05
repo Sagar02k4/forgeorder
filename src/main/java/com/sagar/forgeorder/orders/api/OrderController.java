@@ -2,6 +2,7 @@ package com.sagar.forgeorder.orders.api;
 
 import com.sagar.forgeorder.common.api.ErrorResponse;
 import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
+import com.sagar.forgeorder.orders.application.CancellationService;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
 import com.sagar.forgeorder.orders.persistence.OrderRepository;
 import com.sagar.forgeorder.payments.api.InitiatePaymentRequest;
@@ -34,10 +35,11 @@ public class OrderController {
     private final InventoryRepository inventoryRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final RefundService refundService;
+    private final CancellationService cancellationService;
 
     public OrderController(OrderService orderService,
                            IdempotencyService idempotencyService,
-                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository, RefundService refundService) {
+                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository, RefundService refundService, CancellationService cancellationService) {
         this.orderService = orderService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
@@ -46,6 +48,7 @@ public class OrderController {
         this.inventoryRepository = inventoryRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.refundService = refundService;
+        this.cancellationService = cancellationService;
     }
 
     @PostMapping
@@ -242,6 +245,59 @@ public class OrderController {
                 updatedOrder.getId(),
                 updatedOrder.getStatus(),
                 "Refund processed, order status: " + updatedOrder.getStatus()
+        );
+
+        String responseJson = serializeToJson(response);
+        idempotencyService.completeOperation(idempotencyKey, HttpStatus.OK.value(), responseJson);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<?> cancelOrder(
+            @PathVariable UUID id,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestHeader(value = "X-Correlation-ID", required = false) String correlationIdHeader) {
+
+        String correlationId = (correlationIdHeader != null) ? correlationIdHeader : UUID.randomUUID().toString();
+        String requestHash = idempotencyService.hashRequestBody("{}");
+
+        IdempotencyOutcome outcome = idempotencyService.beginOperation(
+                idempotencyKey, "CANCEL_ORDER", id.toString(), requestHash
+        );
+
+        return switch (outcome.getType()) {
+            case CONFLICT -> ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse(
+                            "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD",
+                            "The Idempotency-Key belongs to a request with different content.",
+                            correlationId
+                    ));
+
+            case IN_PROGRESS -> ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse(
+                            "REQUEST_IN_PROGRESS",
+                            "A request with this Idempotency-Key is already being processed.",
+                            correlationId
+                    ));
+
+            case ALREADY_COMPLETED -> ResponseEntity.status(outcome.getStoredStatusCode())
+                    .body(rawJsonBody(outcome.getStoredResponseBody()));
+
+            case PROCEED -> handleCancellation(id, idempotencyKey, correlationId);
+        };
+    }
+
+    private ResponseEntity<?> handleCancellation(UUID orderId, String idempotencyKey, String correlationId) {
+        cancellationService.cancelOrder(orderId, idempotencyKey, correlationId);
+
+        Order updatedOrder = orderRepository.findById(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        PaymentResponse response = new PaymentResponse(
+                updatedOrder.getId(),
+                updatedOrder.getStatus(),
+                "Cancellation processed, order status: " + updatedOrder.getStatus()
         );
 
         String responseJson = serializeToJson(response);
