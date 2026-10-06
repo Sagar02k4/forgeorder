@@ -1,6 +1,7 @@
 package com.sagar.forgeorder.common.api;
 
 import com.sagar.forgeorder.catalog.domain.ProductNotFoundException;
+import com.sagar.forgeorder.common.ratelimit.RateLimitExceededException;
 import com.sagar.forgeorder.orders.domain.InvalidOrderStateTransitionException;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
 import com.sagar.forgeorder.refunds.domain.InvalidRefundException;
@@ -107,5 +108,17 @@ public class GlobalExceptionHandler {
                 resolveCorrelationId(request)
         );
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitExceeded(
+            RateLimitExceededException ex, WebRequest request) {
+
+        ErrorResponse error = new ErrorResponse(
+                ex.getErrorCode(),
+                ex.getMessage(),
+                resolveCorrelationId(request)
+        );
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(error);
     }
 }

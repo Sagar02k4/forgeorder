@@ -1,6 +1,8 @@
 package com.sagar.forgeorder.orders.api;
 
 import com.sagar.forgeorder.common.api.ErrorResponse;
+import com.sagar.forgeorder.common.ratelimit.RateLimitExceededException;
+import com.sagar.forgeorder.common.ratelimit.RateLimitService;
 import com.sagar.forgeorder.inventory.persistence.InventoryRepository;
 import com.sagar.forgeorder.orders.application.CancellationService;
 import com.sagar.forgeorder.orders.domain.OrderNotFoundException;
@@ -36,10 +38,11 @@ public class OrderController {
     private final PaymentAttemptRepository paymentAttemptRepository;
     private final RefundService refundService;
     private final CancellationService cancellationService;
+    private final RateLimitService rateLimitService;
 
     public OrderController(OrderService orderService,
                            IdempotencyService idempotencyService,
-                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository, RefundService refundService, CancellationService cancellationService) {
+                           ObjectMapper objectMapper, OrderRepository orderRepository, PaymentService paymentService, InventoryRepository inventoryRepository, PaymentAttemptRepository paymentAttemptRepository, RefundService refundService, CancellationService cancellationService, RateLimitService rateLimitService) {
         this.orderService = orderService;
         this.idempotencyService = idempotencyService;
         this.objectMapper = objectMapper;
@@ -49,6 +52,7 @@ public class OrderController {
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.refundService = refundService;
         this.cancellationService = cancellationService;
+        this.rateLimitService = rateLimitService;
     }
 
     @PostMapping
@@ -56,6 +60,11 @@ public class OrderController {
             @Valid @RequestBody CreateOrderRequest request,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestHeader(value = "X-Correlation-ID", required = false) String correlationIdHeader) {
+
+        String rateLimitKey = "rate-limit:order-creation:" + request.customerId();
+        if (!rateLimitService.isAllowed(rateLimitKey)) {
+            throw new RateLimitExceededException("Too many order creation requests. Please try again later.");
+        }
 
         String correlationId = (correlationIdHeader != null) ? correlationIdHeader : UUID.randomUUID().toString();
         String requestHash = idempotencyService.hashRequestBody(serializeToJson(request));
