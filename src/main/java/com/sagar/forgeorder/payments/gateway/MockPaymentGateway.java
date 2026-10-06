@@ -4,6 +4,7 @@ import com.sagar.forgeorder.payments.domain.PaymentGatewayResult;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -88,5 +89,12 @@ public class MockPaymentGateway implements PaymentGateway {
         );
         gatewaySideRecords.put(idempotencyKey, result);
         return result;
+    }
+
+    public String generateWebhookPayload(String providerPaymentId, String eventType) {
+        String providerEventId = "evt_" + UUID.randomUUID();
+        return "{\"providerEventId\":\"" + providerEventId + "\",\"eventType\":\"" + eventType +
+                "\",\"providerPaymentId\":\"" + providerPaymentId + "\",\"eventCreatedAt\":\"" +
+                Instant.now().toString() + "\"}";
     }
 }

@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface PaymentAttemptRepository extends JpaRepository<PaymentAttempt, UUID> {
 
     Optional<PaymentAttempt> findFirstByOrderIdOrderByCreatedAtDesc(UUID orderId);
+    Optional<PaymentAttempt> findByProviderPaymentId(String providerPaymentId);
 }

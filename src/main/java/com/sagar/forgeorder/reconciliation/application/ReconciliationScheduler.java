@@ -5,6 +5,7 @@ import com.sagar.forgeorder.orders.domain.OrderStatus;
 import com.sagar.forgeorder.orders.persistence.OrderRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -25,6 +26,7 @@ public class ReconciliationScheduler {
     }
 
     @Scheduled(fixedDelay = 30000)
+    @Transactional
     public void runReconciliation() {
         List<Order> candidates = orderRepository.findByStatus(OrderStatus.RECONCILIATION_REQUIRED);
 
