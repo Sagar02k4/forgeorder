@@ -23,19 +23,19 @@ It is intentionally implemented as a modular monolith. The application runs as o
 ## System diagrams
 
 ### Architecture
-![Architecture diagram](docs/diagrams/architecture.png)
+![Architecture diagram](docs/architecture.png)
 
 ### Data flow
-![Data flow diagram](docs/diagrams/dataflow.png)
+![Data flow diagram](docs/dataflow.png)
 
 ### Order lifecycle
-![Order lifecycle diagram](docs/diagrams/lifecycle.png)
+![Order lifecycle diagram](docs/lifecycle.png)
 
 ### Request sequence
-![Request sequence diagram](docs/diagrams/sequence.png)
+![Request sequence diagram](docs/sequence.png)
 
 ### Operational workflow
-![Operational workflow diagram](docs/diagrams/workflow.png)
+![Operational workflow diagram](docs/workflow.png)
 
 ## Quick start
 
